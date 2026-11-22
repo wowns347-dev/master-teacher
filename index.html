@@ -1,59 +1,991 @@
-// [구글 Apps Script 전용 코드 - 시트 DB 연동 & 개인정보 보호]
-function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = JSON.parse(e.postData.contents);
-  
-  var action = data.action; // 'login' 또는 'save'
-  var name = String(data.name || "").trim();
-  var studentId = String(data.studentId || "").trim();
-  var score = Number(data.score || 0);
-  var passed = score >= 90 ? "통과" : "미통과";
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트 자기주도 학습관</title>
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Pretendard / Noto Sans KR) -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Three.js (3D 가상 교실 복습용) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* 부드러운 전환 애니메이션 */
+    <!-- ==================== 1. 비밀번호 & 신원 확인 잠금 화면 (초기 진입) ==================== -->
+    <div id="login-screen" class="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 text-center fade-in">
+            <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <i data-lucide="shield-check" class="w-8 h-8"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">학습관 입장 및 신원 확인</h1>
+            <p class="text-sm text-gray-500 mb-6">접속 비밀번호와 학번·이름을 입력하세요.<br><span class="text-xs text-indigo-600 font-medium">* 개인정보는 화면에 노출되지 않으며 학습 기록 확인용으로만 안전하게 저장됩니다.</span></p>
+            
+            <form id="login-form" class="space-y-4 text-left">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1 ml-1">학번 (예: 20601)</label>
+                        <input type="text" id="student-id-input" inputmode="numeric" placeholder="20601" autocomplete="off"
+                            class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-indigo-500 focus:bg-white font-bold text-gray-800 transition-colors"
+                            required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1 ml-1">이름</label>
+                        <input type="text" id="student-name-input" placeholder="홍길동" autocomplete="off"
+                            class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-indigo-500 focus:bg-white font-bold text-gray-800 transition-colors"
+                            required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1 ml-1">수업 접속 비밀번호 (4자리)</label>
+                    <input type="password" id="password-input" maxlength="4" inputmode="numeric" pattern="[0-9]*"
+                        placeholder="••••" 
+                        class="w-full text-center text-2xl tracking-[0.5em] font-bold py-3.5 px-4 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                        required>
+                </div>
+                <p id="login-error" class="text-red-500 text-sm font-medium text-center hidden">입력 정보를 다시 확인해주세요.</p>
+                <button type="submit" id="login-submit-btn"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2">
+                    <span>신원 확인 후 입장하기</span>
+                </button>
+            </form>
+        </div>
+    </div>
 
-  var rows = sheet.getDataRange().getValues();
-  var foundRowIndex = -1;
+    <!-- ==================== 2. 메인 학습 웹앱 화면 ==================== -->
+    <div id="main-app" class="hidden flex-1 flex flex-col max-w-4xl w-full mx-auto px-4 py-6 sm:py-10">
+        
+        <!-- 상단 헤더 & 점수 현황판 (개인정보 절대 비노출) -->
+        <header class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <div class="flex flex-wrap items-center gap-2 mb-2">
+                    <span class="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full">기하 II. 공간도형과 공간좌표</span>
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full">
+                        <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+                        <span>학습자 인증됨 (개인정보 보호중)</span>
+                    </span>
+                </div>
+                <h1 id="lesson-title" class="text-xl sm:text-2xl font-extrabold text-gray-900">1. 좌표공간과 점의 좌표 (교실 자리 배치 탐구)</h1>
+            </div>
+            
+            <!-- 점수 및 복습 해금 상태 표시 -->
+            <div class="flex items-center gap-4 bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100">
+                <div class="text-right">
+                    <p class="text-xs text-gray-500 font-medium">현재 퀴즈 점수</p>
+                    <p class="text-2xl font-black text-indigo-600"><span id="current-score">0</span>점 <span class="text-xs font-normal text-gray-400">/ 100점</span></p>
+                </div>
+                <div id="unlock-badge" class="w-12 h-12 rounded-xl bg-gray-200 text-gray-500 flex items-center justify-center transition-colors" title="90점 이상 달성 시 복습 자료 잠금 해제">
+                    <i id="unlock-icon" data-lucide="lock" class="w-6 h-6"></i>
+                </div>
+            </div>
+        </header>
 
-  // 2행부터 기존 학생 데이터 검색 (이름 + 학번 일치 여부 확인)
-  for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]).trim() === name && String(rows[i][1]).trim() === studentId) {
-      foundRowIndex = i + 1; // 시트 행 번호는 1부터 시작
-      break;
-    }
-  }
+        <!-- 네비게이션 탭 (탭 1: 퀴즈 / 탭 2: 복습 자료) -->
+        <nav class="grid grid-cols-2 gap-3 bg-gray-200/70 p-1.5 rounded-2xl mb-6">
+            <button id="tab-btn-1" onclick="switchTab(1)" 
+                class="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base bg-white text-indigo-600 shadow-sm transition-all">
+                <i data-lucide="help-circle" class="w-5 h-5"></i>
+                <span>탭 1. 개념 확인 퀴즈</span>
+            </button>
+            <button id="tab-btn-2" onclick="switchTab(2)" 
+                class="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base text-gray-600 hover:text-gray-900 transition-all relative">
+                <i id="tab2-icon" data-lucide="lock" class="w-4 h-4 text-amber-500"></i>
+                <span>탭 2. 핵심 복습 자료</span>
+                <span id="tab2-tag" class="hidden sm:inline-block text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">90점 필요</span>
+            </button>
+        </nav>
 
-  // [기능 1] 접속 시 신원 확인 (웹앱에는 이름/학번을 돌려주지 않고 점수/통과여부만 반환!)
-  if (action === "login") {
-    if (foundRowIndex !== -1) {
-      var savedScore = Number(rows[foundRowIndex - 1][2] || 0);
-      var savedPassed = String(rows[foundRowIndex - 1][3] || "미통과");
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "existing",
-        score: savedScore,
-        passed: savedPassed === "통과"
-      })).setMimeType(ContentService.MimeType.JSON);
-    } else {
-      // 신규 학생: 시트에 초기 행 생성 (이름, 학번, 0, 미통과)
-      sheet.appendRow([name, studentId, 0, "미통과"]);
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "new",
-        score: 0,
-        passed: false
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
+        <!-- Custom 알림 메시지 박스 (alert 대체용) -->
+        <div id="toast-box" class="hidden mb-6 p-4 rounded-2xl border flex items-center gap-3 fade-in">
+            <i id="toast-icon" data-lucide="info" class="w-5 h-5 shrink-0"></i>
+            <p id="toast-message" class="text-sm font-medium"></p>
+        </div>
 
-  // [기능 2] 퀴즈 점수 업데이트 저장 (최고 점수 유지)
-  if (action === "save") {
-    if (foundRowIndex !== -1) {
-      var prevScore = Number(rows[foundRowIndex - 1][2] || 0);
-      var bestScore = Math.max(prevScore, score);
-      var bestPassed = bestScore >= 90 ? "통과" : "미통과";
-      sheet.getRange(foundRowIndex, 3).setValue(bestScore);
-      sheet.getRange(foundRowIndex, 4).setValue(bestPassed);
-    } else {
-      sheet.appendRow([name, studentId, score, passed]);
-    }
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "saved"
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
+        <!-- ==================== 탭 1 콘텐츠: 학습 퀴즈 영역 ==================== -->
+        <main id="tab-content-1" class="space-y-6 fade-in">
+            <!-- 교실 좌표계 기준 안내 카드 (학습지 미션 맥락) -->
+            <div class="bg-indigo-900 text-white rounded-3xl p-5 sm:p-6 shadow-md">
+                <div class="flex items-center gap-2 text-indigo-200 text-xs font-bold mb-2">
+                    <i data-lucide="compass" class="w-4 h-4"></i>
+                    <span>우리 교실 좌표공간 설정 기준 (단위: m)</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs sm:text-sm">
+                    <div class="bg-white/10 rounded-2xl p-3">
+                        <p class="text-indigo-200 font-bold mb-0.5">원점 O(0, 0, 0)</p>
+                        <p>칠판 아래 바닥의 정중앙</p>
+                    </div>
+                    <div class="bg-white/10 rounded-2xl p-3">
+                        <p class="text-indigo-200 font-bold mb-0.5">x축 · y축 · z축</p>
+                        <p>x: 좌우 / y: 교실 뒤쪽 / z: 높이</p>
+                    </div>
+                    <div class="bg-white/10 rounded-2xl p-3">
+                        <p class="text-indigo-200 font-bold mb-0.5">좌표평면 대응</p>
+                        <p>바닥: xy평면 / 칠판 벽: xz평면</p>
+                    </div>
+                    <div class="bg-white/10 rounded-2xl p-3">
+                        <p class="text-indigo-200 font-bold mb-0.5">주요 기준점</p>
+                        <p>칠판 중앙 C(0, 0, 1.5), 눈높이 z=1.2</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3 text-blue-800 text-sm">
+                <i data-lucide="lightbulb" class="w-5 h-5 text-blue-600 shrink-0 mt-0.5"></i>
+                <div>
+                    <p class="font-bold mb-0.5">자기주도 학습 규칙</p>
+                    <p>정답은 바로 공개되지 않습니다! 틀리면 <strong>오류 유형(축 혼동·부호·높이 누락 등)에 맞춘 단계별 힌트</strong>가 제공됩니다. 총 10문항 중 <strong>90점(9문제) 이상</strong> 달성 시 [탭 2. 핵심 복습 자료 & 3D 가상 교실]이 열립니다.</p>
+                </div>
+            </div>
+
+            <!-- 퀴즈 문제들이 동적으로 렌더링되는 컨테이너 -->
+            <div id="quiz-container" class="space-y-5"></div>
+
+            <!-- 하단 초기화 버튼 -->
+            <div class="flex justify-end pt-4">
+                <button onclick="resetQuiz()" class="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1.5 px-4 py-2 rounded-xl hover:bg-gray-200/50 transition-colors">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    처음부터 다시 풀기
+                </button>
+            </div>
+        </main>
+
+        <!-- ==================== 탭 2 콘텐츠: 시각적 복습 자료 영역 ==================== -->
+        <section id="tab-content-2" class="hidden space-y-8 fade-in">
+            <!-- 90점 달성 축하 배너 -->
+            <div class="bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-3xl p-6 sm:p-8 shadow-lg">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="bg-white/20 px-3 py-1 rounded-full text-xs font-bold">성취기준 [12기하02-04] 통과!</span>
+                </div>
+                <h2 class="text-2xl font-extrabold mb-2">좌표공간과 점의 좌표 · 완벽 복습 노트</h2>
+                <p class="text-emerald-50 text-sm sm:text-base">학습지 없이도 집에서 개념을 완전히 내 것으로 만들 수 있도록 3D 가상 교실과 핵심 정리 표를 준비했습니다.</p>
+            </div>
+
+            <!-- 1. 인터랙티브 3D 가상 교실 복습 시뮬레이터 -->
+            <div class="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-gray-100">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                        <span class="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full mb-1">시각화 탐구 도구</span>
+                        <h3 class="text-lg sm:text-xl font-extrabold text-gray-900">3D 가상 교실로 수선의 발 · 대칭점 · 거리 확인하기</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="setCameraPreset('default')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">기본 입체 보기</button>
+                        <button type="button" onclick="setCameraPreset('top')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-colors">위에서 보기 (xy평면)</button>
+                        <button type="button" onclick="setCameraPreset('front')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-colors">정면 보기 (xz평면)</button>
+                    </div>
+                </div>
+
+                <!-- 좌표 조절 컨트롤러 -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+                    <div class="lg:col-span-2">
+                        <div id="classroom-3d-wrapper" class="w-full h-72 sm:h-80 bg-slate-900 rounded-2xl relative overflow-hidden border border-slate-200">
+                            <div class="absolute top-3 left-3 z-10 bg-black/60 backdrop-blur-sm text-white text-[11px] px-3 py-1.5 rounded-lg pointer-events-none">
+                                마우스 드래그(터치)로 교실 회전 가능
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 실시간 좌표 분석 패널 -->
+                    <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4">
+                        <h4 class="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                            <i data-lucide="sliders" class="w-4 h-4 text-indigo-600"></i>
+                            내 눈 위치 E(x, y, 1.2) 조절
+                        </h4>
+                        <div class="space-y-3 text-xs">
+                            <div>
+                                <div class="flex justify-between font-bold mb-1">
+                                    <span class="text-red-600">x좌표 (좌우: -4 ~ 4m)</span>
+                                    <span id="val-x">2.0 m</span>
+                                </div>
+                                <input type="range" id="slider-x" min="-4" max="4" step="0.5" value="2" oninput="update3DSeat()" class="w-full accent-red-500">
+                            </div>
+                            <div>
+                                <div class="flex justify-between font-bold mb-1">
+                                    <span class="text-emerald-600">y좌표 (앞뒤: 1 ~ 9m)</span>
+                                    <span id="val-y">6.0 m</span>
+                                </div>
+                                <input type="range" id="slider-y" min="1" max="9" step="0.5" value="6" oninput="update3DSeat()" class="w-full accent-emerald-600">
+                            </div>
+                        </div>
+
+                        <div class="border-t border-slate-200 pt-3 space-y-2 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">내 눈 위치 E:</span>
+                                <span id="info-eye" class="font-bold text-indigo-700">(2, 6, 1.2)</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">의자(xy평면 수선의 발):</span>
+                                <span id="info-chair" class="font-bold text-gray-800">(2, 6, 0)</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">칠판 정면(xz평면 수선의 발):</span>
+                                <span id="info-board" class="font-bold text-gray-800">(2, 0, 1.2)</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">짝 자리(yz평면 대칭점):</span>
+                                <span id="info-pair" class="font-bold text-amber-700">(-2, 6, 1.2)</span>
+                            </div>
+                            <div class="bg-white p-2.5 rounded-xl border border-slate-200 mt-2">
+                                <p class="text-gray-500 mb-0.5">칠판 중앙 C(0, 0, 1.5)까지 거리:</p>
+                                <p id="info-dist" class="font-extrabold text-sm text-indigo-600">√(2² + 6² + (-0.3)²) ≈ 6.33 m</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 수선의 발과 대칭점 공식 한눈에 정리 표 -->
+            <div class="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-gray-100">
+                <span class="inline-block px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full mb-2">핵심 공식 비교표</span>
+                <h3 class="text-lg sm:text-xl font-extrabold text-gray-900 mb-4">점 P(a, b, c)의 수선의 발 vs 대칭점 완벽 정리</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <th class="p-3.5 rounded-tl-xl font-bold">기준</th>
+                                <th class="p-3.5 font-bold">수선의 발 (해당 성분을 0으로!)</th>
+                                <th class="p-3.5 rounded-tr-xl font-bold">대칭점 (나머지 성분의 부호를 반대로!)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr>
+                                <td class="p-3.5 font-bold text-indigo-700">xy평면 (바닥)</td>
+                                <td class="p-3.5 font-semibold">(a, b, <span class="text-red-600 font-bold">0</span>) <span class="text-xs text-gray-400">← z좌표만 0</span></td>
+                                <td class="p-3.5 font-semibold">(a, b, <span class="text-blue-600 font-bold">-c</span>) <span class="text-xs text-gray-400">← z 부호 반대</span></td>
+                            </tr>
+                            <tr>
+                                <td class="p-3.5 font-bold text-indigo-700">yz평면 (교실 중앙선)</td>
+                                <td class="p-3.5 font-semibold">(<span class="text-red-600 font-bold">0</span>, b, c) <span class="text-xs text-gray-400">← x좌표만 0</span></td>
+                                <td class="p-3.5 font-semibold">(<span class="text-blue-600 font-bold">-a</span>, b, c) <span class="text-xs text-gray-400">← x 부호 반대 (짝 자리)</span></td>
+                            </tr>
+                            <tr>
+                                <td class="p-3.5 font-bold text-indigo-700">zx평면 (칠판 벽)</td>
+                                <td class="p-3.5 font-semibold">(a, <span class="text-red-600 font-bold">0</span>, c) <span class="text-xs text-gray-400">← y좌표만 0</span></td>
+                                <td class="p-3.5 font-semibold">(a, <span class="text-blue-600 font-bold">-b</span>, c) <span class="text-xs text-gray-400">← y 부호 반대</span></td>
+                            </tr>
+                            <tr class="bg-slate-50/60">
+                                <td class="p-3.5 font-bold text-emerald-700">x축 · y축 · z축</td>
+                                <td class="p-3.5 text-xs sm:text-sm">x축: (a, 0, 0) / y축: (0, b, 0) / z축: (0, 0, c)</td>
+                                <td class="p-3.5 text-xs sm:text-sm">x축: (a, -b, -c) / y축: (-a, b, -c) / z축: (-a, -b, c)</td>
+                            </tr>
+                            <tr class="bg-slate-50/60">
+                                <td class="p-3.5 font-bold text-rose-700">원점 O(0, 0, 0)</td>
+                                <td class="p-3.5 text-gray-500">(0, 0, 0)</td>
+                                <td class="p-3.5 font-bold text-rose-700">(-a, -b, -c) <span class="text-xs font-normal text-gray-500">← 세 좌표 부호 모두 반대</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. 시각적 복습 카드 그리드 -->
+            <div id="review-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 자바스크립트에서 복습 데이터를 기반으로 자동 생성됩니다 -->
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==================== 자바스크립트 로직 및 학습 데이터 ==================== -->
+    <script>
+        // =========================================================================
+        // 군포고등학교 2학년 기하 교수학습지도안 기반 퀴즈 및 복습 데이터
+        // =========================================================================
+        const APP_CONFIG = {
+            accessPassword: "4321", // 접속 비밀번호
+            passScore: 90,          // 복습 자료 해금 기준 점수
+            // ★ 아래 따옴표 안에 구글 Apps Script 배포 후 받은 웹 앱 URL을 붙여넣으세요!
+            scriptUrl: "",          
+            lessonTitle: "1. 좌표공간과 점의 좌표 (교실 자리 배치 탐구)",
+            
+            // 1. 퀴즈 데이터 (10문항 × 10점 = 100점)
+            quizzes: [
+                {
+                    id: 1,
+                    type: "choice",
+                    question: "우리 교실 좌표공간에서 칠판 아래 바닥 중앙을 원점 O(0, 0, 0)으로 정했을 때, '교실 바닥'과 '칠판이 걸린 앞벽'은 각각 어떤 좌표평면에 해당할까요?",
+                    options: [
+                        "바닥: xy평면, 칠판 벽: xz평면",
+                        "바닥: xz평면, 칠판 벽: xy평면",
+                        "바닥: yz평면, 칠판 벽: xy평면",
+                        "바닥: xy평면, 칠판 벽: yz평면"
+                    ],
+                    answer: "바닥: xy평면, 칠판 벽: xz평면",
+                    hints: [
+                        "힌트 1: 바닥은 높이가 0(z=0)인 평면이므로 x축과 y축이 만드는 평면입니다.",
+                        "힌트 2: 칠판 벽은 앞뒤 거리(y)가 0인 평면이므로 좌우(x)와 높이(z)가 만드는 평면입니다."
+                    ]
+                },
+                {
+                    id: 2,
+                    type: "short",
+                    question: "원점 O(칠판 아래 바닥 중앙)에서 오른쪽으로 2m, 교실 뒤쪽으로 6m 떨어져 있고, 앉은 눈높이가 1.2m인 학생의 눈 위치 E의 좌표를 (a, b, c) 형태로 입력하세요.",
+                    answer: "(2, 6, 1.2)",
+                    hints: [
+                        "힌트 1: 좌표 순서는 (좌우 x, 앞뒤 y, 높이 z)입니다. 높이를 누락하지 않도록 주의하세요!",
+                        "힌트 2: x=2, y=6, z=1.2 이므로 괄호를 포함하여 (2, 6, 1.2) 형태로 적어보세요."
+                    ]
+                },
+                {
+                    id: 3,
+                    type: "short",
+                    question: "내 눈의 위치가 E(2, 6, 1.2)일 때, 내가 앉아 있는 '의자(바닥에 내린 수선의 발)'의 좌표는 무엇인가요?",
+                    answer: "(2, 6, 0)",
+                    hints: [
+                        "힌트 1: 바닥(xy평면)에 내린 수선의 발은 좌우(x)와 앞뒤(y) 위치는 그대로이고 '높이'만 0이 됩니다.",
+                        "힌트 2: z좌표만 0으로 바꾸어 (2, 6, 0) 형태로 입력하세요."
+                    ]
+                },
+                {
+                    id: 4,
+                    type: "short",
+                    question: "내 눈의 위치가 E(2, 6, 1.2)일 때, 내 눈높이 그대로 정면 칠판 벽(xz평면)에 수직으로 내린 '칠판 위 정면 점'의 좌표는 무엇인가요?",
+                    answer: "(2, 0, 1.2)",
+                    hints: [
+                        "힌트 1: 칠판 벽은 앞뒤 거리(y)가 0인 평면(xz평면)입니다.",
+                        "힌트 2: x좌표(2)와 눈높이 z좌표(1.2)는 유지되고 y좌표만 0이 됩니다. (2, 0, 1.2) 형태로 입력하세요."
+                    ]
+                },
+                {
+                    id: 5,
+                    type: "short",
+                    question: "[짝 자리 대칭 배치] 내 눈 위치가 E(2, 6, 1.2)일 때, 교실 가운데 통로(yz평면)를 기준으로 좌우 대칭인 짝의 눈 위치 좌표는 무엇인가요?",
+                    answer: "(-2, 6, 1.2)",
+                    hints: [
+                        "힌트 1: 교실 가운데 선(yz평면)에 대하여 대칭이면 앞뒤 거리(y)와 눈높이(z)는 같고 좌우(x) 방향만 반대가 됩니다.",
+                        "힌트 2: x좌표의 부호만 반대로 바꾸어 (-2, 6, 1.2) 형태로 입력하세요."
+                    ]
+                },
+                {
+                    id: 6,
+                    type: "choice",
+                    question: "좌표공간의 점 P(-3, 4, 5)에서 'x축'에 내린 수선의 발의 좌표로 옳은 것은 무엇인가요?",
+                    options: ["(-3, 0, 0)", "(0, 4, 5)", "(-3, 4, 0)", "(3, -4, -5)"],
+                    answer: "(-3, 0, 0)",
+                    hints: [
+                        "힌트 1: 평면에서 x축에 내린 수선의 발이 (x, 0)이었던 것을 공간으로 확장해보세요.",
+                        "힌트 2: x축 위의 점은 y좌표와 z좌표가 모두 0입니다. x좌표(-3)만 남습니다."
+                    ]
+                },
+                {
+                    id: 7,
+                    type: "choice",
+                    question: "점 P(1, -2, 3)을 '원점'에 대하여 대칭이동한 점의 좌표로 옳은 것은 무엇인가요?",
+                    options: ["(-1, 2, -3)", "(-1, -2, 3)", "(1, 2, -3)", "(-1, 2, 3)"],
+                    answer: "(-1, 2, -3)",
+                    hints: [
+                        "힌트 1: 원점 대칭은 x축, y축, z축 방향이 모두 반대로 바뀝니다.",
+                        "힌트 2: 세 좌표의 부호를 모두 반대로 바꾸어 보세요."
+                    ]
+                },
+                {
+                    id: 8,
+                    type: "short",
+                    question: "원점 O(0, 0, 0)와 점 P(2, 3, 6) 사이의 거리는 얼마인가요? (숫자만 입력)",
+                    answer: "7",
+                    hints: [
+                        "힌트 1: 바닥의 수선의 발 H(2, 3, 0)를 이용하면 피타고라스 정리를 두 번 적용할 수 있습니다. (OP² = 2² + 3² + 6²)",
+                        "힌트 2: 4 + 9 + 36 = 49 입니다. 제곱해서 49가 되는 양수를 입력하세요."
+                    ]
+                },
+                {
+                    id: 9,
+                    type: "short",
+                    question: "칠판 중앙 C(0, 0, 1.5)에서 학생의 눈 위치 E(2, 2, 2.5)까지의 거리는 얼마인가요? (숫자만 입력)",
+                    answer: "3",
+                    hints: [
+                        "힌트 1: 세 좌표의 차이를 각각 구해보세요. Δx = 2-0 = 2, Δy = 2-0 = 2, Δz = 2.5-1.5 = 1 입니다.",
+                        "힌트 2: √(2² + 2² + 1²) = √(4 + 4 + 1) = √9 입니다."
+                    ]
+                },
+                {
+                    id: 10,
+                    type: "choice",
+                    question: "[도전 과제: 균형 잡힌 자리] 칠판 양 끝 A(-2, 0, 1.5)와 B(2, 0, 1.5)까지의 거리가 서로 같아지는 자리는 어느 평면 위에 있을까요?",
+                    options: [
+                        "yz평면 (x = 0인 교실 중앙선 라인)",
+                        "xy평면 (교실 바닥)",
+                        "xz평면 (칠판 벽)",
+                        "x = 2인 평면"
+                    ],
+                    answer: "yz평면 (x = 0인 교실 중앙선 라인)",
+                    hints: [
+                        "힌트 1: 칠판 양 끝 A(-2, 0, 1.5)와 B(2, 0, 1.5)는 x좌표만 부호가 반대이고 y, z좌표가 같습니다.",
+                        "힌트 2: 좌우 어느 한쪽으로 치우치지 않고 정중앙(x = 0)에 앉아야 양 끝까지의 거리가 같아집니다."
+                    ]
+                }
+            ],
+
+            // 2. 탭 2 복습 자료 데이터 (90점 이상 달성 시 공개되는 시각적 요약 카드)
+            reviewCards: [
+                {
+                    step: "핵심 원리 01",
+                    title: "평면좌표에서 공간좌표로의 확장",
+                    color: "indigo",
+                    summary: "새로운 공식을 무작정 외우기보다 '평면좌표 (a, b)에 높이를 나타내는 z좌표 하나가 더해진 것'으로 이해합니다.",
+                    keyPoints: [
+                        "원점 O: 세 좌표축(x축, y축, z축)이 서로 수직으로 만나는 점",
+                        "위에서 내려다보면(xy평면 정사영) 점 P(a, b, c)는 평면 위의 점 (a, b)처럼 보입니다.",
+                        "눈높이(z=1.2)와 칠판 높이(z=1.5)가 다르므로 실제 거리를 구할 때 z좌표가 필수입니다."
+                    ]
+                },
+                {
+                    step: "핵심 원리 02",
+                    title: "두 점 사이의 거리 공식 유도 원리",
+                    color: "emerald",
+                    summary: "직육면체의 대각선 길이를 구하듯 '피타고라스 정리'를 두 번 연속 적용하여 유도합니다.",
+                    keyPoints: [
+                        "1단계(바닥 대각선): OH² = (x₂-x₁)² + (y₂-y₁)²",
+                        "2단계(입체 대각선): AB² = OH² + (z₂-z₁)²",
+                        "공식: AB = √{(x₂-x₁)² + (y₂-y₁)² + (z₂-z₁)²}"
+                    ]
+                },
+                {
+                    step: "오답 탈출 03",
+                    title: "자주 틀리는 3가지 실수 체크리스트",
+                    color: "amber",
+                    summary: "교실 자리 배치 활동에서 가장 빈번하게 나타나는 오답 패턴을 스스로 점검해보세요.",
+                    keyPoints: [
+                        "① 높이 누락 오류: 바닥 의자(z=0)와 학생 눈 위치(z=1.2)를 혼동하는 경우",
+                        "② 축 순서 혼동: 좌우(x)와 앞뒤(y)의 순서를 바꾸어 (y, x, z)로 입력하는 경우",
+                        "③ 대칭점 부호 오류: yz평면 대칭일 때 x좌표가 아닌 다른 좌표의 부호를 바꾸는 경우"
+                    ]
+                },
+                {
+                    step: "다음 차시 예고 04",
+                    title: "공간좌표의 다음 탐구 주제",
+                    color: "sky",
+                    summary: "오늘 배운 점의 좌표와 두 점 사이의 거리 원리는 다음 시간 학습의 기초가 됩니다.",
+                    keyPoints: [
+                        "다음 차시: 두 점 사이의 거리 공식의 다양한 활용 문제 해결",
+                        "이후 학습: 좌표공간에서 선분의 내분점의 좌표(평면 공식에 z좌표 확장) 및 구의 방정식"
+                    ]
+                }
+            ]
+        };
+        // 앱 상태 관리 변수 (개인정보는 화면 렌더링에 절대 사용하지 않음)
+        let state = {
+            isAuthenticated: false,
+            studentName: "",    // DB 전송 전용 (화면 노출 금지)
+            studentId: "",      // DB 전송 전용 (화면 노출 금지)
+            solvedMap: {},      // { quizId: true/false }
+            attemptsMap: {},    // { quizId: 시도횟수 }
+            score: 0
+        };
+
+        // 3D 씬 전역 변수
+        // 1. 비밀번호 및 DB 신원 확인 로그인 처리
+        function setupLogin() {
+            const loginForm = document.getElementById("login-form");
+            const idInput = document.getElementById("student-id-input");
+            const nameInput = document.getElementById("student-name-input");
+            const passwordInput = document.getElementById("password-input");
+            const errorText = document.getElementById("login-error");
+            const submitBtn = document.getElementById("login-submit-btn");
+
+            loginForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                errorText.classList.add("hidden");
+
+                const sId = idInput.value.trim();
+                const sName = nameInput.value.trim();
+                const pw = passwordInput.value.trim();
+
+                if (!sId || !sName) {
+                    errorText.textContent = "학번과 이름을 모두 입력해주세요.";
+                    errorText.classList.remove("hidden");
+                    return;
+                }
+
+                if (pw !== APP_CONFIG.accessPassword) {
+                    errorText.textContent = "비밀번호가 일치하지 않습니다. 다시 확인해주세요.";
+                    errorText.classList.remove("hidden");
+                    passwordInput.value = "";
+                    passwordInput.focus();
+                    return;
+                }
+
+                // 메모리 변수에만 보관 (DOM 및 localStorage에 절대 기록하지 않음)
+                state.studentId = sId;
+                state.studentName = sName;
+
+                // 입력창 즉시 비우기 (화면 흔적 제거)
+                idInput.value = "";
+                nameInput.value = "";
+                passwordInput.value = "";
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<span>신원 확인 및 기록 조회 중...</span>`;
+
+                try {
+                    if (APP_CONFIG.scriptUrl) {
+                        const res = await fetch(APP_CONFIG.scriptUrl, {
+                            method: "POST",
+                            body: JSON.stringify({
+                                action: "login",
+                                name: state.studentName,
+                                studentId: state.studentId
+                            })
+                        });
+                        const result = await res.json();
+
+                        enterMainApp();
+
+                        if (result.status === "existing" && result.score > 0) {
+                            state.score = result.score;
+                            document.getElementById("current-score").textContent = state.score;
+                            if (result.passed || state.score >= APP_CONFIG.passScore) {
+                                unlockReviewTab(false);
+                                showToast(`이전 학습 기록(${state.score}점)이 확인되었습니다! 바로 복습 자료를 열람할 수 있습니다.`, "success");
+                            } else {
+                                showToast(`이전 최고 점수(${state.score}점)가 확인되었습니다. 90점 이상에 도전해보세요!`, "info");
+                            }
+                        } else {
+                            showToast("신원 확인이 완료되었습니다! 퀴즈를 풀고 90점 이상을 달성해보세요.", "info");
+                        }
+                    } else {
+                        // scriptUrl 미연결 시 로컬 테스트 모드 동작
+                        enterMainApp();
+                        showToast("입장 완료! (안내: 구글 시트 URL 연결 시 기록이 자동 저장됩니다.)", "info");
+                    }
+                } catch (err) {
+                    enterMainApp();
+                    showToast("입장 완료! (네트워크 상태로 인해 오프라인 모드로 진행됩니다.)", "info");
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<span>신원 확인 후 입장하기</span>`;
+                }
+            });
+        }
+
+        function enterMainApp() {
+            state.isAuthenticated = true;
+            document.getElementById("login-screen").classList.add("hidden");
+            document.getElementById("main-app").classList.remove("hidden");
+            lucide.createIcons();
+        }
+
+        // 구글 스프레드시트 DB에 점수 및 통과여부 비동기 저장
+        async function syncScoreToSheet(currentScore) {
+            if (!APP_CONFIG.scriptUrl || !state.studentName || !state.studentId) return;
+            try {
+                await fetch(APP_CONFIG.scriptUrl, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        action: "save",
+                        name: state.studentName,
+                        studentId: state.studentId,
+                        score: currentScore
+                    })
+                });
+            } catch (e) {
+                console.error("DB 동기화 오류:", e);
+            }
+        }
+
+        // 4. 퀴즈 화면 렌더링
+        function renderQuizzes() {
+            const container = document.getElementById("quiz-container");
+            container.innerHTML = "";
+            const pointPerQuiz = Math.round(100 / APP_CONFIG.quizzes.length);
+
+            APP_CONFIG.quizzes.forEach((quiz, index) => {
+                state.solvedMap[quiz.id] = false;
+                state.attemptsMap[quiz.id] = 0;
+
+                const card = document.createElement("div");
+                card.id = `quiz-card-${quiz.id}`;
+                card.className = "bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-gray-100 transition-all";
+
+                let inputHTML = "";
+                if (quiz.type === "choice") {
+                    inputHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                        ${quiz.options.map((opt, optIdx) => `
+                            <button type="button" onclick="checkChoiceAnswer(${quiz.id}, '${opt}', this)"
+                                class="opt-btn-${quiz.id} text-left p-4 rounded-2xl border-2 border-gray-100 hover:border-indigo-300 hover:bg-indigo-50/40 font-medium text-gray-700 transition-all flex items-center gap-3">
+                                <span class="w-7 h-7 rounded-full bg-gray-100 text-gray-600 text-xs font-bold flex items-center justify-center shrink-0">${optIdx + 1}</span>
+                                <span>${opt}</span>
+                            </button>
+                        `).join("")}
+                    </div>`;
+                } else {
+                    inputHTML = `<div class="flex flex-col sm:flex-row gap-3 mt-4">
+                        <input type="text" id="short-input-${quiz.id}" placeholder="정답을 입력하세요"
+                            onkeypress="if(event.key === 'Enter') checkShortAnswer(${quiz.id})"
+                            class="flex-1 px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-indigo-500 focus:bg-white font-medium">
+                        <button type="button" onclick="checkShortAnswer(${quiz.id})"
+                            class="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl transition-colors shrink-0">
+                            정답 확인
+                        </button>
+                    </div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                        <span class="px-3 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg">문제 ${index + 1} (${pointPerQuiz}점)</span>
+                        <span id="status-badge-${quiz.id}" class="text-xs font-bold text-gray-400">미해결</span>
+                    </div>
+                    <h3 class="text-base sm:text-lg font-bold text-gray-900 leading-relaxed">${quiz.question}</h3>
+                    ${inputHTML}
+                    <!-- 피드백 및 힌트 박스 (정답은 절대 노출하지 않음) -->
+                    <div id="feedback-${quiz.id}" class="hidden mt-4 p-4 rounded-2xl text-sm"></div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // 5. 객관식 정답 검증
+        function checkChoiceAnswer(quizId, selectedOption, btnElement) {
+            if (state.solvedMap[quizId]) return; // 이미 맞힌 문제 방지
+            const quiz = APP_CONFIG.quizzes.find(q => q.id === quizId);
+            evaluateAnswer(quiz, selectedOption, btnElement);
+        }
+
+        // 6. 단답형 정답 검증
+        function checkShortAnswer(quizId) {
+            if (state.solvedMap[quizId]) return;
+            const inputEl = document.getElementById(`short-input-${quizId}`);
+            const userVal = inputEl.value.trim();
+            if (!userVal) {
+                showToast("답안을 입력한 뒤 확인 버튼을 눌러주세요.", "error");
+                return;
+            }
+            const quiz = APP_CONFIG.quizzes.find(q => q.id === quizId);
+            evaluateAnswer(quiz, userVal, inputEl);
+        }
+
+        // 7. 공통 채점 및 힌트 제공 로직 (핵심 제한사항 준수: 답을 알려주지 않고 힌트 제공)
+        function evaluateAnswer(quiz, userAnswer, targetEl) {
+            const feedbackBox = document.getElementById(`feedback-${quiz.id}`);
+            const statusBadge = document.getElementById(`status-badge-${quiz.id}`);
+            const card = document.getElementById(`quiz-card-${quiz.id}`);
+
+            // 공백 제거 및 대소문자 무시 비교
+            const isCorrect = userAnswer.replace(/\s+/g, "").toLowerCase() === quiz.answer.replace(/\s+/g, "").toLowerCase();
+
+            feedbackBox.classList.remove("hidden");
+
+            if (isCorrect) {
+                // 정답 처리
+                state.solvedMap[quiz.id] = true;
+                card.classList.remove("border-gray-100", "border-amber-200");
+                card.classList.add("border-emerald-300", "bg-emerald-50/20");
+
+                statusBadge.textContent = "정답 완료 ✔";
+                statusBadge.className = "text-xs font-bold text-emerald-600 bg-emerald-100 px-2.5 py-1 rounded-lg";
+
+                feedbackBox.className = "mt-4 p-4 rounded-2xl text-sm bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-2 font-medium fade-in";
+                feedbackBox.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5 text-emerald-600 shrink-0"></i> <span>정답입니다! 훌륭하게 이해했네요.</span>`;
+
+                // 입력 비활성화
+                if (quiz.type === "choice") {
+                    document.querySelectorAll(`.opt-btn-${quiz.id}`).forEach(btn => {
+                        btn.disabled = true;
+                        if (btn === targetEl) {
+                            btn.classList.add("border-emerald-500", "bg-emerald-50", "text-emerald-900", "font-bold");
+                        } else {
+                            btn.classList.add("opacity-50");
+                        }
+                    });
+                } else {
+                    targetEl.disabled = true;
+                    targetEl.classList.add("border-emerald-500", "bg-emerald-50", "text-emerald-900", "font-bold");
+                }
+
+                updateScore();
+            } else {
+                // 오답 처리 -> 정답 공개 없이 단계별 힌트 제공
+                state.attemptsMap[quiz.id] += 1;
+                const attempt = state.attemptsMap[quiz.id];
+                const hintIndex = Math.min(attempt - 1, quiz.hints.length - 1);
+                const currentHint = quiz.hints[hintIndex];
+
+                card.classList.add("border-amber-200");
+                statusBadge.textContent = `재도전 중 (${attempt}회 시도)`;
+                statusBadge.className = "text-xs font-bold text-amber-600 bg-amber-100 px-2.5 py-1 rounded-lg";
+
+                if (quiz.type === "choice" && targetEl) {
+                    targetEl.classList.add("border-red-300", "bg-red-50/50", "text-red-700");
+                }
+
+                feedbackBox.className = "mt-4 p-4 rounded-2xl text-sm bg-amber-50 border border-amber-200 text-amber-900 space-y-1.5 fade-in";
+                feedbackBox.innerHTML = `
+                    <div class="flex items-center gap-2 font-bold text-amber-800">
+                        <i data-lucide="help-circle" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                        <span>아쉽지만 정답이 아닙니다. 아래 힌트를 보고 다시 생각해보세요!</span>
+                    </div>
+                    <p class="pl-6 text-amber-900 font-medium">${currentHint}</p>
+                `;
+            }
+            lucide.createIcons();
+        }
+
+        // 8. 점수 계산 및 90점 이상 복습 자료 잠금 해제 처리
+        function updateScore() {
+            const total = APP_CONFIG.quizzes.length;
+            const solvedCount = Object.values(state.solvedMap).filter(Boolean).length;
+            state.score = Math.round((solvedCount / total) * 100);
+
+            document.getElementById("current-score").textContent = state.score;
+
+            // 구글 스프레드시트 DB에 실시간 점수 및 통과여부 저장
+            syncScoreToSheet(state.score);
+
+            // 90점 이상 달성 여부 확인
+            if (state.score >= APP_CONFIG.passScore) {
+                unlockReviewTab(true);
+            }
+        }
+
+        function unlockReviewTab(showBanner = true) {
+            const unlockBadge = document.getElementById("unlock-badge");
+            const unlockIcon = document.getElementById("unlock-icon");
+            const tab2Icon = document.getElementById("tab2-icon");
+            const tab2Tag = document.getElementById("tab2-tag");
+
+            unlockBadge.className = "w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center transition-colors";
+            unlockIcon.setAttribute("data-lucide", "unlock");
+
+            tab2Icon.setAttribute("data-lucide", "book-open");
+            tab2Icon.className = "w-5 h-5 text-emerald-600";
+            
+            if (tab2Tag) {
+                tab2Tag.textContent = "열람 가능";
+                tab2Tag.className = "hidden sm:inline-block text-[11px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full";
+            }
+
+            if (showBanner) {
+                showToast(`축하합니다! ${state.score}점을 달성하여 [탭 2. 핵심 복습 자료] 잠금이 해제되었습니다!`, "success");
+            }
+            lucide.createIcons();
+        }
+
+        // 10. 퀴즈 초기화
+        function resetQuiz() {
+            state.score = 0;
+            document.getElementById("current-score").textContent = "0";
+            
+            // 잠금 상태 복구
+            document.getElementById("unlock-badge").className = "w-12 h-12 rounded-xl bg-gray-200 text-gray-500 flex items-center justify-center transition-colors";
+            document.getElementById("unlock-icon").setAttribute("data-lucide", "lock");
+            document.getElementById("tab2-icon").setAttribute("data-lucide", "lock");
+            document.getElementById("tab2-icon").className = "w-4 h-4 text-amber-500";
+            
+            const tab2Tag = document.getElementById("tab2-tag");
+            if (tab2Tag) {
+                tab2Tag.textContent = "90점 필요";
+                tab2Tag.className = "hidden sm:inline-block text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full";
+            }
+
+            switchTab(1);
+            renderQuizzes();
+            showToast("퀴즈가 초기화되었습니다. 처음부터 다시 도전해보세요!", "info");
+        }
+
+        // =========================================================================
+        // 11. Three.js 기반 3D 가상 교실 시뮬레이터 (탭 2 복습 도구)
+        // =========================================================================
+        function init3DClassroom() {
+            const container = document.getElementById("classroom-3d-wrapper");
+            if (!container || is3DInitialized) return;
+            is3DInitialized = true;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+
+            const width = container.clientWidth || 500;
+            const height = container.clientHeight || 300;
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // 조명 설정
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(5, 10, 8);
+            scene.add(dirLight);
+
+            // 교실 바닥 (xy평면: -4 <= x <= 4, 0 <= y <= 9 -> Three.js에서는 x, z평면으로 매핑)
+            // 좌표 매핑: 수학(x, y, z) -> Three.js(x, z, y)
+            const floorGeo = new THREE.PlaneGeometry(8, 9);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, side: THREE.DoubleSide });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(0, 0, 4.5);
+            scene.add(floor);
+
+            // 바닥 격자
+            const gridHelper = new THREE.GridHelper(10, 10, 0x334155, 0x334155);
+            gridHelper.position.set(0, 0.01, 4.5);
+            scene.add(gridHelper);
+
+            // 칠판 (xz평면, y=0 위치, 폭 4m(-2~2), 높이 1~2m, 중앙 C(0,0,1.5))
+            const boardGeo = new THREE.BoxGeometry(4, 1.2, 0.08);
+            const boardMat = new THREE.MeshStandardMaterial({ color: 0x065f46 });
+            const blackboard = new THREE.Mesh(boardGeo, boardMat);
+            blackboard.position.set(0, 1.5, 0);
+            scene.add(blackboard);
+
+            // 칠판 중앙점 C(0, 0, 1.5) 표시
+            const cGeo = new THREE.SphereGeometry(0.12, 16, 16);
+            const cMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+            const cPoint = new THREE.Mesh(cGeo, cMat);
+            cPoint.position.set(0, 1.5, 0.05);
+            scene.add(cPoint);
+
+            // 좌표축 (x: 빨강, y(교실뒤): 초록, z(높이): 파랑)
+            const axesGroup = new THREE.Group();
+            const xMat = new THREE.LineBasicMaterial({ color: 0xef4444 });
+            const yMat = new THREE.LineBasicMaterial({ color: 0x10b981 });
+            const zMat = new THREE.LineBasicMaterial({ color: 0x3b82f6 });
+
+            axesGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-4.5, 0.02, 0), new THREE.Vector3(4.5, 0.02, 0)]), xMat));
+            axesGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.02, 0), new THREE.Vector3(0, 0.02, 9.5)]), yMat));
+            axesGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3.2, 0)]), zMat));
+            scene.add(axesGroup);
+
+            // 동적 점 마커 생성 (내 눈 E, 의자, 칠판 정면, 짝 자리)
+            eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 20), new THREE.MeshStandardMaterial({ color: 0x6366f1 }));
+            chairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 16), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
+            boardMesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 16), new THREE.MeshStandardMaterial({ color: 0x38bdf8 }));
+            pairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 20), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+
+            scene.add(eyeMesh, chairMesh, boardMesh, pairMesh);
+            lineGroup = new THREE.Group();
+            scene.add(lineGroup);
+
+            update3DSeat();
+            updateCameraPosition();
+
+            // 마우스 및 터치 회전 이벤트
+            const dom = renderer.domElement;
+            dom.addEventListener("mousedown", (e) => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; });
+            window.addEventListener("mouseup", () => { isDragging = false; });
+            window.addEventListener("mousemove", (e) => {
+                if (!isDragging) return;
+                cameraAngle.theta -= (e.clientX - prevMouse.x) * 0.01;
+                cameraAngle.phi = Math.max(0.2, Math.min(Math.PI / 2 - 0.05, cameraAngle.phi - (e.clientY - prevMouse.y) * 0.01));
+                prevMouse = { x: e.clientX, y: e.clientY };
+                updateCameraPosition();
+            });
+
+            dom.addEventListener("touchstart", (e) => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+            }, { passive: true });
+            window.addEventListener("touchend", () => { isDragging = false; });
+            window.addEventListener("touchmove", (e) => {
+                if (!isDragging || e.touches.length !== 1) return;
+                cameraAngle.theta -= (e.touches[0].clientX - prevMouse.x) * 0.01;
+                cameraAngle.phi = Math.max(0.2, Math.min(Math.PI / 2 - 0.05, cameraAngle.phi - (e.touches[0].clientY - prevMouse.y) * 0.01));
+                prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                updateCameraPosition();
+            }, { passive: true });
+
+            window.addEventListener("resize", on3DResize);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function on3DResize() {
+            const container = document.getElementById("classroom-3d-wrapper");
+            if (!container || !renderer || !camera) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width > 0 && height > 0) {
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            }
+        }
+
+        function updateCameraPosition() {
+            if (!camera) return;
+            const target = new THREE.Vector3(0, 0.8, 4.0);
+            camera.position.x = target.x + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta);
+            camera.position.y = target.y + cameraAngle.radius * Math.cos(cameraAngle.phi);
+            camera.position.z = target.z + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta);
+            camera.lookAt(target);
+        }
+
+        // 시점 프리셋 (기본 / 위에서 보기 xy평면 / 정면 보기 xz평면)
+        function setCameraPreset(preset) {
+            if (preset === "top") {
+                cameraAngle = { theta: 0, phi: 0.08, radius: 13.5 };
+            } else if (preset === "front") {
+                cameraAngle = { theta: 0, phi: 1.48, radius: 12.5 };
+            } else {
+                cameraAngle = { theta: 0.65, phi: 0.95, radius: 13 };
+            }
+            updateCameraPosition();
+        }
+
+        // 슬라이더 조작 시 3D 점 및 거리 계산 업데이트
+        function update3DSeat() {
+            const x = parseFloat(document.getElementById("slider-x").value);
+            const y = parseFloat(document.getElementById("slider-y").value);
+            const z = 1.2;
+
+            document.getElementById("val-x").textContent = `${x.toFixed(1)} m`;
+            document.getElementById("val-y").textContent = `${y.toFixed(1)} m`;
+
+            document.getElementById("info-eye").textContent = `(${x}, ${y}, ${z})`;
+            document.getElementById("info-chair").textContent = `(${x}, ${y}, 0)`;
+            document.getElementById("info-board").textContent = `(${x}, 0, ${z})`;
+            document.getElementById("info-pair").textContent = `(${-x}, ${y}, ${z})`;
+
+            // 칠판 중앙 C(0, 0, 1.5)까지의 거리 계산
+            const dx = x - 0;
+            const dy = y - 0;
+            const dz = z - 1.5;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            document.getElementById("info-dist").textContent = `√(${dx}² + ${dy}² + (${dz.toFixed(1)})²) ≈ ${dist.toFixed(2)} m`;
+
+            if (!eyeMesh) return;
+
+            // Three.js 좌표 매핑: (x, z, y)
+            const pEye = new THREE.Vector3(x, z, y);
+            const pChair = new THREE.Vector3(x, 0.05, y);
+            const pBoard = new THREE.Vector3(x, z, 0.05);
+            const pPair = new THREE.Vector3(-x, z, y);
+            const pCenter = new THREE.Vector3(0, 1.5, 0.05);
+
+            eyeMesh.position.copy(pEye);
+            chairMesh.position.copy(pChair);
+            boardMesh.position.copy(pBoard);
+            pairMesh.position.copy(pPair);
+
+            // 수선의 발 연결선 및 대칭선 그리기
+            lineGroup.clear();
+            const dashedMat = new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.2, gapSize: 0.1 });
+            const pairMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, dashSize: 0.2, gapSize: 0.1 });
+            const distMat = new THREE.LineBasicMaterial({ color: 0x34d399 });
+
+            const l1 = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pEye, pChair]), dashedMat);
+            l1.computeLineDistances();
+            const l2 = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pEye, pBoard]), dashedMat);
+            l2.computeLineDistances();
+            const l3 = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pEye, pPair]), pairMat);
+            l3.computeLineDistances();
+            const l4 = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pEye, pCenter]), distMat);
+
+            lineGroup.add(l1, l2, l3, l4);
+        }
+    </script>
+</body>
+</html>
