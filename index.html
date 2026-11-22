@@ -18,6 +18,23 @@
             background-color: #f3f4f6;
         }
         /* 부드러운 전환 애니메이션 */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 3D 캔버스 반응형 컨테이너 */
+        #classroom-3d-wrapper canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 1rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-gray-800 antialiased">
     <!-- ==================== 1. 비밀번호 & 신원 확인 잠금 화면 (초기 진입) ==================== -->
     <div id="login-screen" class="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 text-center fade-in">
