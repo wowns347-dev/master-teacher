@@ -496,6 +496,20 @@
         };
 
         // 3D 씬 전역 변수
+        let scene, camera, renderer, eyeMesh, chairMesh, boardMesh, pairMesh, lineGroup;
+        let isDragging = false, prevMouse = { x: 0, y: 0 };
+        let cameraAngle = { theta: 0.65, phi: 0.95, radius: 13 };
+        let is3DInitialized = false;
+
+        // 초기화 실행
+        document.addEventListener("DOMContentLoaded", () => {
+            lucide.createIcons();
+            document.getElementById("lesson-title").textContent = APP_CONFIG.lessonTitle;
+            setupLogin();
+            renderQuizzes();
+            renderReviewCards();
+        });
+
         // 1. 비밀번호 및 DB 신원 확인 로그인 처리
         function setupLogin() {
             const loginForm = document.getElementById("login-form");
@@ -602,6 +616,61 @@
                 });
             } catch (e) {
                 console.error("DB 동기화 오류:", e);
+            }
+        }
+
+        // 2. 커스텀 알림 메시지 표시 (alert 대체)
+        function showToast(message, type = "info") {
+            const box = document.getElementById("toast-box");
+            const msgEl = document.getElementById("toast-message");
+            const iconEl = document.getElementById("toast-icon");
+
+            box.className = "mb-6 p-4 rounded-2xl border flex items-center gap-3 fade-in ";
+            if (type === "error") {
+                box.className += "bg-red-50 border-red-200 text-red-800";
+                iconEl.setAttribute("data-lucide", "alert-circle");
+            } else if (type === "success") {
+                box.className += "bg-emerald-50 border-emerald-200 text-emerald-800";
+                iconEl.setAttribute("data-lucide", "check-circle-2");
+            } else {
+                box.className += "bg-indigo-50 border-indigo-200 text-indigo-800";
+                iconEl.setAttribute("data-lucide", "info");
+            }
+
+            msgEl.textContent = message;
+            box.classList.remove("hidden");
+            lucide.createIcons();
+        }
+
+        // 3. 탭 전환 제어 (90점 미만일 때 탭 2 차단)
+        function switchTab(tabNumber) {
+            if (tabNumber === 2 && state.score < APP_CONFIG.passScore) {
+                showToast(`복습 자료는 퀴즈 ${APP_CONFIG.passScore}점 이상 달성해야 열립니다! (현재 점수: ${state.score}점)`, "error");
+                return;
+            }
+
+            const btn1 = document.getElementById("tab-btn-1");
+            const btn2 = document.getElementById("tab-btn-2");
+            const content1 = document.getElementById("tab-content-1");
+            const content2 = document.getElementById("tab-content-2");
+
+            if (tabNumber === 1) {
+                btn1.className = "flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base bg-white text-indigo-600 shadow-sm transition-all";
+                btn2.className = "flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base text-gray-600 hover:text-gray-900 transition-all";
+                content1.classList.remove("hidden");
+                content2.classList.add("hidden");
+            } else {
+                btn2.className = "flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base bg-white text-emerald-600 shadow-sm transition-all";
+                btn1.className = "flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base text-gray-600 hover:text-gray-900 transition-all";
+                content2.classList.remove("hidden");
+                content1.classList.add("hidden");
+
+                // 탭 2가 열릴 때 3D 가상 교실 초기화 및 리사이즈
+                if (!is3DInitialized) {
+                    setTimeout(init3DClassroom, 50);
+                } else {
+                    on3DResize();
+                }
             }
         }
 
@@ -779,6 +848,45 @@
             if (showBanner) {
                 showToast(`축하합니다! ${state.score}점을 달성하여 [탭 2. 핵심 복습 자료] 잠금이 해제되었습니다!`, "success");
             }
+            lucide.createIcons();
+        }
+
+        // 9. 복습 자료 카드 렌더링
+        function renderReviewCards() {
+            const container = document.getElementById("review-container");
+            container.innerHTML = "";
+
+            const colorMap = {
+                indigo: { badge: "bg-indigo-100 text-indigo-700", border: "border-indigo-100", icon: "text-indigo-600" },
+                emerald: { badge: "bg-emerald-100 text-emerald-700", border: "border-emerald-100", icon: "text-emerald-600" },
+                amber: { badge: "bg-amber-100 text-amber-700", border: "border-amber-100", icon: "text-amber-600" },
+                sky: { badge: "bg-sky-100 text-sky-700", border: "border-sky-100", icon: "text-sky-600" }
+            };
+
+            APP_CONFIG.reviewCards.forEach(item => {
+                const theme = colorMap[item.color] || colorMap.indigo;
+                const card = document.createElement("div");
+                card.className = `bg-white rounded-3xl p-6 shadow-sm border ${theme.border} flex flex-col justify-between`;
+                
+                card.innerHTML = `
+                    <div>
+                        <span class="inline-block px-3 py-1 ${theme.badge} text-xs font-bold rounded-full mb-3">${item.step}</span>
+                        <h3 class="text-lg font-extrabold text-gray-900 mb-3">${item.title}</h3>
+                        <p class="text-sm text-gray-700 bg-slate-50 p-4 rounded-2xl leading-relaxed mb-4 border border-slate-100 font-medium">
+                            ${item.summary}
+                        </p>
+                    </div>
+                    <ul class="space-y-2">
+                        ${item.keyPoints.map(pt => `
+                            <li class="flex items-start gap-2 text-sm text-gray-600">
+                                <i data-lucide="check" class="w-4 h-4 ${theme.icon} shrink-0 mt-0.5"></i>
+                                <span>${pt}</span>
+                            </li>
+                        `).join("")}
+                    </ul>
+                `;
+                container.appendChild(card);
+            });
             lucide.createIcons();
         }
 
